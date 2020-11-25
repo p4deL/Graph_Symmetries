@@ -10,6 +10,7 @@ import sys
 import getopt
 import os.path
 import re
+import time
 import numpy as np
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
@@ -42,7 +43,6 @@ def read_bondfile(name):
 
 
 def create_degree_hop_dict(graph, is_observable=False):
-
 	degree_hop_dict = {}
 
 	# iterate over all nodes to set start and target node
@@ -71,6 +71,7 @@ def create_degree_hop_dict(graph, is_observable=False):
 	return degree_hop_dict
 
 
+# TOOOOOOO SLOW
 def calc_symmetries(graph_name_list, graph_list, is_observable=False):
 	# traverse all graphs
 	sym_list = []
@@ -110,7 +111,7 @@ def calc_symmetries(graph_name_list, graph_list, is_observable=False):
 
 					# check if the two (colored) graphs are isomorphic. Therefore consider the node attributes to match the start
 					# and end nodes
-					#nm = iso.categorical_node_match(["start", "target"], [False, False])
+					# nm = iso.categorical_node_match(["start", "target"], [False, False])
 					nm = iso.numerical_node_match("hop", 0)
 					if nx.is_isomorphic(ref_graph, check_graph, node_match=nm):
 						# print("				ok")
@@ -122,7 +123,71 @@ def calc_symmetries(graph_name_list, graph_list, is_observable=False):
 							if not is_observable:
 								sym_matrix[check_target, check_start] = sym_counter
 
-		#print(graph.graph)
+		print(graph.graph)
+		print(sym_matrix)
+		print("\n")
+
+		for n in range(sym_matrix.size):
+			indices = np.argwhere(sym_matrix == n)
+			sym_numb_local = indices.shape[0]
+			if sym_numb_local != 0:
+				start, target = indices[0]
+				sym_list.append((graph_name.replace('\n', ''), start, target, sym_numb_local))
+
+	return sym_list
+
+
+def calc_symmetries_faster(graph_name_list, graph_list, is_observable=False):
+	# traverse all graphs
+	sym_list = []
+
+	for graph_name, graph in zip(graph_name_list, graph_list):
+
+		# create symmetry matrix where hoppings that can be matched will have the same entry.
+		# Entries are simply given in ascending order
+		sz = graph.number_of_nodes()
+		sym_matrix = np.zeros((sz, sz), dtype=int)
+
+		# create 2 dimensional dictionary where first key is (degree start, degree target), second key is
+		# (node start, node target) and the value if a list of accordingly colored graphs
+		degree_hop_dict = create_degree_hop_dict(graph, is_observable=is_observable)
+		# print("graph: ", graph.graph)
+
+		sym_counter = 0
+
+		# iterate through outer dictionary with degree keys. As only hopping between nodes of the same degree can be matched
+		for degrees, colored_graphs in degree_hop_dict.items():
+
+			# iterate through inner dictionary
+			# choose a colored graph as reference graph
+			#print(graph.graph)
+
+			for i, element in enumerate(colored_graphs):
+				(ref_start, ref_target), ref_graph = element
+				#print(ref_graph.nodes.data())
+
+				if not ref_graph.graph["checked"]:
+					ref_graph.graph["checked"] = True
+					sym_counter += 1
+					#print("check first:", (ref_start, ref_target), sym_counter)
+					sym_matrix[ref_start, ref_target] = sym_counter
+					if not is_observable and ref_start != ref_target:
+						sym_matrix[ref_target, ref_start] = sym_counter
+
+					for (check_start, check_target), check_graph in colored_graphs[i+1:]:
+
+						if not check_graph.graph["checked"]:
+							nm = iso.categorical_node_match("hop", 0)
+							if nx.is_isomorphic(ref_graph, check_graph, node_match=nm):
+								check_graph.graph["checked"] = True
+								#sym_counter += 1
+								#print("check other:", (check_start, check_target), sym_counter)
+								sym_matrix[check_start, check_target] = sym_counter
+								if not is_observable:
+									sym_matrix[check_target, check_start] = sym_counter
+
+
+
 		#print(sym_matrix)
 		#print("\n")
 
@@ -131,8 +196,8 @@ def calc_symmetries(graph_name_list, graph_list, is_observable=False):
 			sym_numb_local = indices.shape[0]
 			if sym_numb_local != 0:
 				start, target = indices[0]
-				sym_list.append((graph_name.replace('\n',''), start, target, sym_numb_local))
-		
+				sym_list.append((graph_name.replace('\n', ''), start, target, sym_numb_local))
+
 	return sym_list
 
 
@@ -183,16 +248,25 @@ def main(argv):
 		glob_sym_numb, g = read_bondfile(dir + graph_name)
 		g.graph['key'] = graph_key
 		g.graph['sym_numb'] = glob_sym_numb
+		g.graph['checked'] = False
 		graph_list.append(g)
-		#print(g.graph, g.nodes, g.edges)
+	# print(g.graph, g.nodes, g.edges)
 
-	sym_list = calc_symmetries(graph_name_list, graph_list, is_observable=observable_flag)
-	print(sym_list)
+	start_time = time.time()
+	sym_list = calc_symmetries_faster(graph_name_list, graph_list, is_observable=True)
+	print("--- %s seconds ---" % (time.time() - start_time))
+
+	# print(sym_list)
 
 	if observable_flag:
-		out_file_name = "outout"
-
-	with open('output')
+		out_file_name = "output/_0_symObsGraphsList_order4.cfg"
+	else:
+		out_file_name = "output/_0_symGraphsList_order4.cfg"
+	with open(out_file_name, 'w') as out_file:
+		out_file.write("#graph_number  hopping_from hopping_to symmetry_number \n")
+		for entry in sym_list:
+			graph_name, start, target, sym_numb_local = entry
+			out_file.write(graph_name + ' ' + str(start) + ' ' + str(target) + ' ' + str(sym_numb_local) + '\n')
 
 
 if __name__ == "__main__":
