@@ -3,9 +3,6 @@ clear all
 % Info for non-matlab users like me
 %
 % cell: A cell array is a data type with indexed data containers called cells, 
-%       where each cell can contain any type of data.
-% size(A, dim): Returns dim-th entry of size vector.
-% numel(A): Number of array elements
 % unique(A): only unique values of A -> remove duplicates
 % A == B: returns logical array
 % find(X): returns vector of inidces of each non-zero element of X
@@ -13,13 +10,16 @@ clear all
 
 load('Square_Lattice_Reduced_Embeddings_Order10.mat');
 
-order=6;
+order=3;
 
 double_touch=false;
 
 % gnum is array of graph keys
 % consturct empty cell elements of dim 1
 relevant_links=cell(size(gnum,1),1);
+%       where each cell can contain any type of data.
+% size(A, dim): Returns dim-th entry of size vector.
+% numel(A): Number of array elements
 ground_states=false(size(gnum,1),1);
 partyhard_info=cell(size(gnum,1),1);
 
@@ -248,34 +248,41 @@ end
 
 % Patrick's inefficient stuff
 
-out_str = "#graph_number  hopping_from hopping_to symmetry_number";
+out_str = "#graph_number  hopping_from hopping_to hopping_symmetry_number global_symmetry_number";
 out_str = sprintf(out_str + '\n');
 
-partyhard_info{1}
 partyhard_info{2}
-
+partyhard_info{1}
+glob_sym_numb = 0;
 for idx=1:size(partyhard_info)
     % just consider upper triangular matrix, as this symmetry is already considered in my other porgram
-    sym_matrix = triu(partyhard_info{idx});
+    sym_matrix = partyhard_info{idx};
+    %print(sym_matrix);
     for n=1:numel(sym_matrix) % N^2 elements
        % determine symmetry number
        sym_numb = numel(find(sym_matrix == n));
        if sym_numb ~= 0
+           %increment global symmetry number
+           glob_sym_numb = glob_sym_numb + sym_numb;
            % extract subscripts from linear index
            [from, to] = ind2sub(size(sym_matrix), n);
            %[from, to] = [from, to]-1;
            % create line for hopping of graph with symmetry number
            % subscript shift
            graphname = "_" + gnum{idx} + "_" + "order" + num2str(numedges(SmallGraphs{idx})) + ".cfg";
-           out_str = out_str + graphname + ' ' + num2str(from-1) + ' ' + num2str(to-1) + ' ' + num2str(sym_numb);
+           out_str = out_str + graphname + ' ' + num2str(from-1) + ' ' + num2str(to-1) + ' ' + num2str(sym_numb) + ' ' + num2str(glob_sym_numb);
            out_str = sprintf(out_str + '\n');
+           if from ~= to
+                glob_sym_numb = glob_sym_numb + sym_numb;
+                out_str = out_str + graphname + ' ' + num2str(to-1) + ' ' + num2str(from-1) + ' ' + num2str(sym_numb) + ' ' + num2str(glob_sym_numb);
+                out_str = sprintf(out_str + '\n');
+           end
        end  
     end
 end
 
 % write out
-filename = "~/Repos/GraphSymmetrien/output/_0_symObsGraphsList_order" + num2str(order) + ".cfg";
-
+filename = "~/Repos/GraphSymmetries/output/_0_symObsGraphsList_order" + num2str(order) + ".cfg";
 fid = fopen(filename,'wt');
 fprintf(fid, out_str);
 fclose(fid);

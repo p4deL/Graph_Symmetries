@@ -8,6 +8,7 @@
 # and the associated symmetry numbers. There is also the option to account for a "reverse process" symmetry, i.e.,
 # i->j = j->I.
 #
+# Usage: Graph_Symmetries.py -g <path to graph list> [-r]
 #
 
 import sys
@@ -78,12 +79,12 @@ def create_graph_list(dir, graph_name_list):
 	return graph_list, order
 
 
-def create_degree_process_dict(graph, is_observable=False):
+def create_degree_process_dict(graph, is_reverse_sym=False):
 	"""Create colored graph to incorporate start and target nodes of a process and sort the colored graphs into a
 	dictionary with (degree start, degree target) keys and list values containing tuples of the form
 	(node start, node target), colored graph).
 	:param graph: uncolored graph which is used to generate colored graphs
-	:param is_observable: If the flag is disabled the number of graphs is reduced because of the symmetry i->j = j->i
+	:param is_reverse_sym: If the flag is enabled the number of graphs is reduced because of the symmetry i->j = j->i
 	:return: created
 	"""
 
@@ -92,11 +93,12 @@ def create_degree_process_dict(graph, is_observable=False):
 	# iterate over all nodes to set start and target node
 	for node_start in graph.nodes:
 
-		# if we calculate an observable we need to differentiate i->j and j->i processes
-		if is_observable:
-			target_nodes = list(graph.nodes)
-		else:  # otherwise not, so we confine to the cas j>=i
+		# if there is no reverse symmetry (e.g. observable) we need to differentiate i->j and j->i processes
+		# but if so, we confine to the case j>=i
+		if is_reverse_sym:
 			target_nodes = list(graph.nodes)[node_start:]
+		else:
+			target_nodes = list(graph.nodes)
 
 		for node_target in target_nodes:
 			tmp = graph.copy()
@@ -185,12 +187,12 @@ def calc_symmetries(graph_name_list, graph_list, is_observable=False):
 	return sym_list
 
 
-def calc_symmetries_faster(graph_name_list, graph_list, is_observable=False):
+def calc_symmetries_faster(graph_name_list, graph_list, is_reverse_sym=False):
 	"""Calculate the symmetry numbers of all processes for each graph in a graph list to effectively reduce the number
 	of processes.
 	:param graph_name_list: list containing the graph names
 	:param graph_list: list containing the graph objects
-	:param is_observable: If the flag is disabled the number of graphs is reduced because of the symmetry i->j = j->i
+	:param is_reverse_sym: If the flag is enabled the number of graphs is reduced because of the symmetry i->j = j->i
 	:return: symmetry list containing tuples of the form (graph name, global symmetry, start, target, local symmetry)
 	"""
 	sym_list = []
@@ -205,7 +207,7 @@ def calc_symmetries_faster(graph_name_list, graph_list, is_observable=False):
 
 		# create dictionary where first key is (degree start, degree target) and the value is a list of the form
 		# [(node start, node target), colored graph), (...), ...].
-		degree_hop_dict = create_degree_process_dict(graph, is_observable=is_observable)
+		degree_hop_dict = create_degree_process_dict(graph, is_reverse_sym=is_reverse_sym)
 
 		# we use this to number the symmetries
 		sym_counter = 0
@@ -224,7 +226,7 @@ def calc_symmetries_faster(graph_name_list, graph_list, is_observable=False):
 					# write symmetry number to the symmetry matrix
 					sym_matrix[ref_start, ref_target] = sym_counter
 					# if it is a hopping we have this symmetry: i->j = j->i
-					if not is_observable and ref_start != ref_target:
+					if is_reverse_sym and ref_start != ref_target:
 						sym_matrix[ref_target, ref_start] = sym_counter
 
 					# iterate over all other graphs
@@ -238,7 +240,7 @@ def calc_symmetries_faster(graph_name_list, graph_list, is_observable=False):
 								check_graph.graph["checked"] = True
 								# write to the symmetry matrix
 								sym_matrix[check_start, check_target] = sym_counter
-								if not is_observable:
+								if is_reverse_sym:
 									sym_matrix[check_target, check_start] = sym_counter
 
 		# At the end we evaluate the symmetry matrix, calculate the symmetry factor and append the info to the sym_list
@@ -254,17 +256,17 @@ def calc_symmetries_faster(graph_name_list, graph_list, is_observable=False):
 
 def usage():
 
-	return "Usage: Graph_Symmetries.py -g <path to graph list> [-o]"
+	return "Usage: Graph_Symmetries.py -g <path to graph list> [-r]"
 
 
 def param_use(argv):
 
 	found_g = False
-	observable_flag = False
+	reverse_sym_flag = False
 	path_to_graph_list = ""
 
 	try:
-		opts, args = getopt.getopt(argv, 'g:o', ["graphs=", "observable"])
+		opts, args = getopt.getopt(argv, 'g:r', ["graphs=", "reverseSym"])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(1)
@@ -273,21 +275,21 @@ def param_use(argv):
 		if opt in ('-g', '--graphs'):
 			found_g = True
 			path_to_graph_list = arg
-		if opt in ('-o', '--observable'):
-			observable_flag = True
+		if opt in ('-r', '--reverseSym'):
+			reverse_sym_flag = True
 
 	if not found_g:
 		print("graph list not found.")
 		usage()
 		sys.exit(1)
 
-	return path_to_graph_list, observable_flag
+	return path_to_graph_list, reverse_sym_flag
 
 
 def main(argv):
 
 	# load terminal parameters
-	path_to_graph_list, observable_flag = param_use(argv)
+	path_to_graph_list, reverse_sym_flag = param_use(argv)
 	dir = os.path.dirname(path_to_graph_list) + "/"
 
 	# read in all graph names
@@ -299,11 +301,11 @@ def main(argv):
 
 	# calculate the symmetries of every graph
 	start_time = time.time()
-	sym_list = calc_symmetries_faster(graph_name_list, graph_list, is_observable=observable_flag)
+	sym_list = calc_symmetries_faster(graph_name_list, graph_list, is_reverse_sym=reverse_sym_flag)
 	print("--- %s seconds ---" % (time.time() - start_time))
 
 	# different file names for hopping or observable symmetries
-	if observable_flag:
+	if reverse_sym_flag:
 		out_file_name = "output/_0_symObsGraphsList_order" + str(order) + ".cfg"
 	else:
 		out_file_name = "output/_0_symGraphsList_order" + str(order) + ".cfg"
