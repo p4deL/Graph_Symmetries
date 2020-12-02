@@ -95,17 +95,16 @@ def create_degree_process_dict(graph, is_reverse_sym=False):
 
 		# if there is no reverse symmetry (e.g. observable) we need to differentiate i->j and j->i processes
 		# but if so, we confine to the case j>=i
-		if is_reverse_sym:
-			target_nodes = list(graph.nodes)[node_start:]
-		else:
-			target_nodes = list(graph.nodes)
 
-		for node_target in target_nodes:
+		for node_target in graph.nodes:
 			tmp = graph.copy()
 
 			# we color the nodes with the attribute "hop". 1 indicates the start and 2 the target node.
 			tmp.nodes[node_start]["hop"] = 1
-			tmp.nodes[node_target]["hop"] = 2
+			if is_reverse_sym:
+				tmp.nodes[node_target]["hop"] = 1
+			else:
+				tmp.nodes[node_target]["hop"] = 2
 
 			# extract the degrees of the considered nodes since we want to use such tuples as keys in the dictionary
 			degrees = (tmp.degree[node_start], tmp.degree[node_target])
@@ -121,73 +120,7 @@ def create_degree_process_dict(graph, is_reverse_sym=False):
 	return degree_process_dict
 
 
-# TOOOOOOO SLOW
-def calc_symmetries(graph_name_list, graph_list, is_observable=False):
-	# traverse all graphs
-	sym_list = []
-
-	for graph_name, graph in zip(graph_name_list, graph_list):
-
-		# create symmetry matrix where hoppings that can be matched will have the same entry.
-		# Entries are simply given in ascending order
-		sz = graph.number_of_nodes()
-		sym_matrix = np.zeros((sz, sz), dtype=int)
-
-		# create 2 dimensional dictionary where first key is (degree start, degree target), second key is
-		# (node start, node target) and the value if a list of accordingly colored graphs
-		degree_hop_dict = create_degree_process_dict(graph, is_observable=is_observable)
-		# print("graph: ", graph.graph)
-
-		sym_counter = 0
-
-		# iterate through outer dictionary with degree keys. As only hopping between nodes of the same degree can be matched
-		for degrees, colored_graphs in degree_hop_dict.items():
-			# print("	degrees: ", degrees)
-
-			# These must be new symmetries as we have a new degree tuple
-
-			# iterate through inner dictionary
-			# choose a colored graph as reference graph
-			for idx, element in enumerate(colored_graphs):
-				(ref_start, ref_target), ref_graph = element
-				# for each reference graph increase the symmetry counter as this might be a new symmetry
-				# sym_counter += 1
-				found_sym = False
-
-				# choose a second graph to compare with the reference graph
-				# print("		hops: ", ref_start, ref_target)
-				for (check_start, check_target), check_graph in colored_graphs[idx:]:
-					# print("			", check_start, check_target)
-
-					# check if the two (colored) graphs are isomorphic. Therefore consider the node attributes to match the start
-					# and end nodes
-					# nm = iso.categorical_node_match(["start", "target"], [False, False])
-					nm = iso.numerical_node_match("hop", 0)
-					if nx.is_isomorphic(ref_graph, check_graph, node_match=nm):
-						# print("				ok")
-						if sym_matrix[check_start, check_target] == 0:
-							if not found_sym:
-								found_sym = True
-								sym_counter += 1
-							sym_matrix[check_start, check_target] = sym_counter
-							if not is_observable:
-								sym_matrix[check_target, check_start] = sym_counter
-
-		print(graph.graph)
-		print(sym_matrix)
-		print("\n")
-
-		for n in range(sym_matrix.size):
-			indices = np.argwhere(sym_matrix == n)
-			sym_numb_local = indices.shape[0]
-			if sym_numb_local != 0:
-				start, target = indices[0]
-				sym_list.append((graph_name.replace('\n', ''), start, target, sym_numb_local))
-
-	return sym_list
-
-
-def calc_symmetries_faster(graph_name_list, graph_list, is_reverse_sym=False):
+def calc_symmetries(graph_name_list, graph_list, is_reverse_sym=False):
 	"""Calculate the symmetry numbers of all processes for each graph in a graph list to effectively reduce the number
 	of processes.
 	:param graph_name_list: list containing the graph names
@@ -205,6 +138,7 @@ def calc_symmetries_faster(graph_name_list, graph_list, is_reverse_sym=False):
 		sz = graph.number_of_nodes()
 		sym_matrix = np.zeros((sz, sz), dtype=int)
 
+
 		# create dictionary where first key is (degree start, degree target) and the value is a list of the form
 		# [(node start, node target), colored graph), (...), ...].
 		degree_hop_dict = create_degree_process_dict(graph, is_reverse_sym=is_reverse_sym)
@@ -217,7 +151,6 @@ def calc_symmetries_faster(graph_name_list, graph_list, is_reverse_sym=False):
 
 			# iterate through colored graphs
 			for i, ((ref_start, ref_target), ref_graph) in enumerate(colored_graphs):
-
 				# At first, we check if a colored graph needs to be ignored because it is isomorphic to a graph that
 				# was already checked. If not it is a new symmetry
 				if not ref_graph.graph["checked"]:
@@ -301,18 +234,18 @@ def main(argv):
 
 	# calculate the symmetries of every graph
 	start_time = time.time()
-	sym_list = calc_symmetries_faster(graph_name_list, graph_list, is_reverse_sym=reverse_sym_flag)
+	sym_list = calc_symmetries(graph_name_list, graph_list, is_reverse_sym=reverse_sym_flag)
 	print("--- %s seconds ---" % (time.time() - start_time))
 
 	# different file names for hopping or observable symmetries
 	if reverse_sym_flag:
-		out_file_name = "output/_0_symObsGraphsList_order" + str(order) + ".cfg"
-	else:
 		out_file_name = "output/_0_symGraphsList_order" + str(order) + ".cfg"
+	else:
+		out_file_name = "output/_0_symObsGraphsList_order" + str(order) + ".cfg"
 
 	# write symmetry factors to file
 	with open(out_file_name, 'w') as out_file:
-		out_file.write("#graph_number  hopping_from hopping_to symmetry_number \n")
+		out_file.write("#graph_number goblal_sym_number hopping_from hopping_to local_sym_number \n")
 		for entry in sym_list:
 			graph_name, global_sym_numb, start, target, sym_numb_local = entry
 			out_file.write(graph_name + ' ' + str(global_sym_numb) + ' ' + str(start) + ' ' + str(target) + ' '

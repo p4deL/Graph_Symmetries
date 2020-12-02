@@ -13,7 +13,7 @@ clear all
 
 load('Square_Lattice_Reduced_Embeddings_Order10.mat');
 
-order=9;
+order=7;
 
 double_touch=false;
 
@@ -246,10 +246,11 @@ end
         partyhard_info{i,1}=partyhard_info_;
 end
 
-% Patrick's inefficient stuff
+% Patrick's stuff
 
 out_str = "#graph_number  hopping_from hopping_to symmetry_number";
 out_str = sprintf(out_str + '\n');
+
 
 for idx=1:size(partyhard_info)
     % just consider upper triangular matrix, as this symmetry is already considered in my other porgram
