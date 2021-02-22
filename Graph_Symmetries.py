@@ -24,17 +24,15 @@ import networkx.algorithms.isomorphism as iso
 def read_bondfile(name):
 	"""Read in the number of vertices, number fo extra info bits and graph object of bond file.
 	:param name: full path name of the bond file
-	:return: (global) symmetry number, graph object
+	:return: graph object
 	"""
 
-	read_line = symmetry_number = 0
+	read_line = 0
 	edge_list = []
 
 	with open(name, "r") as file:
 		for line in file.readlines():
-			if line.startswith("# Symmetry number"):
-				symmetry_number = int(line.replace("# Symmetry number = ", ""))
-			elif not (line.startswith("#") or line.startswith("\n")):
+			if not (line.startswith("#") or line.startswith("\n")):
 				if read_line > 1:
 					line = line.replace(";\n", "")
 					bond = line.split(" ")
@@ -47,7 +45,7 @@ def read_bondfile(name):
 
 	graph.add_edges_from(edge_list)
 
-	return symmetry_number, graph
+	return graph
 
 
 def create_graph_list(dir, graph_name_list):
@@ -63,14 +61,21 @@ def create_graph_list(dir, graph_name_list):
 	for graph_name in graph_name_list:
 		# extract graph key and order
 		graph_name = graph_name.replace('\n', '')
-		graph_key = re.search('_(.*)_order', graph_name).group(1)
-		order_graph = int(re.search('_order(.*).cfg', graph_name).group(1))
+
+		graph_key = re.search('/(.*)-', graph_name).group(1)
+		order_graph = int(re.search('-(.*)-', graph_name).group(1))
+		glob_sym_numb = re.search('aut(.*).cfg', graph_name).group(1)
+
 		# find maximal order of given list
 		if order_graph > order:
 			order = order_graph
 
 		# create graphs and assign global properties
-		glob_sym_numb, g = read_bondfile(dir + graph_name)
+		g = read_bondfile(dir + graph_name)
+
+		# deprecated
+		#glob_sym_numb, g = read_bondfile(dir + graph_name)
+
 		g.graph['key'] = graph_key
 		g.graph['sym_numb'] = glob_sym_numb  # global symmetry number
 		g.graph['checked'] = False  # we will later use this property to check if a graph was sorted out due to a sym.
@@ -238,14 +243,13 @@ def main(argv):
 	print("--- %s seconds ---" % (time.time() - start_time))
 
 	# different file names for hopping or observable symmetries
-	if reverse_sym_flag:
-		out_file_name = "output/_0_symGraphsList_order" + str(order) + ".cfg"
-	else:
-		out_file_name = "output/_0_symObsGraphsList_order" + str(order) + ".cfg"
+	out_file_name = "output/graphlist_hopsym_order" + str(order) + ".cfg"
+	#else:
+	#	out_file_name = "output/_0_symObsGraphsList_order" + str(order) + ".cfg"
 
 	# write symmetry factors to file
 	with open(out_file_name, 'w') as out_file:
-		out_file.write("#graph_number goblal_sym_number hopping_from hopping_to local_sym_number \n")
+		out_file.write("#graph_name goblal_sym_number hopping_from hopping_to local_sym_number \n")
 		for entry in sym_list:
 			graph_name, global_sym_numb, start, target, sym_numb_local = entry
 			out_file.write(graph_name + ' ' + str(global_sym_numb) + ' ' + str(start) + ' ' + str(target) + ' '
